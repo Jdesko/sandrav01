@@ -82,8 +82,8 @@
     <script>
         // Configuração - SUBSTITUA com seus dados
         const CONFIG = {
-            clientId: "sry7kmswapped8tatvu8",
-            clientSecret: "b6a6e19d5df94e078dd705acb7e225c6",
+            clientId: "hwnt489m5gkpfyf45vcm",
+            clientSecret: "cc224d8b1ec64b9e850d6ef55e5ba402",
             deviceId: "bfe2a8f17ebd1d39d1hctm",
             baseUrl: "https://openapi.tuyaeu.com"
         };
@@ -178,7 +178,7 @@
                 const sign = helpers.calculateSign(CONFIG.clientId, token, CONFIG.clientSecret, timestamp);
                 
                 const data = await helpers.fetchWithRetry(
-                    `${CONFIG.baseUrl}/v1.0/devices/${CONFIG.deviceId}/status`, {
+                    `${CONFIG.baseUrl}/v2.0/cloud/thing/${CONFIG.deviceId}/status`, {
                     method: 'GET',
                     headers: {
                         'client_id': CONFIG.clientId,
