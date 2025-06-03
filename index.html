@@ -139,7 +139,7 @@
             const sign = helpers.calculateSign(CONFIG.clientId, '', CONFIG.clientSecret, timestamp);
             
             try {
-                const data = await helpers.fetchWithRetry(`${CONFIG.baseUrl}/v1.0/token?grant_type=1`, {
+                const data = await helpers.fetchWithRetry(`${CONFIG.baseUrl}/v1.0/token?grant_type=2`, {
                     method: 'GET',
                     headers: {
                         'client_id': CONFIG.clientId,
