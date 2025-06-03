@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Solar Residencial</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        .dashboard {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            width: 150px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .value {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .generation { color: #34a853; }
+        .consumption { color: #fbbc05; }
+        .grid { color: #ea4335; }
+        .voltage { color: #9c27b0; }
+        button {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .error {
+            color: #d32f2f;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Monitoramento Solar</h1>
+    
+    <div class="dashboard">
+        <div class="card">
+            <h3>Produção</h3>
+            <div class="value generation" id="generation">-- W</div>
+        </div>
+        
+        <div class="card">
+            <h3>Consumo</h3>
+            <div class="value consumption" id="consumption">-- W</div>
+        </div>
+        
+        <div class="card">
+            <h3>Rede</h3>
+            <div class="value grid" id="grid">-- W</div>
+        </div>
+        
+        <div class="card">
+            <h3>Voltagem</h3>
+            <div class="value voltage" id="voltage">-- V</div>
+        </div>
+    </div>
+    
+    <div id="error" class="error"></div>
+    <button id="refresh">Atualizar</button>
+    <div id="lastUpdate" style="margin-top: 15px;"></div>
+
+    <script>
+        // Configuração - SUBSTITUA com seus dados
+        const CONFIG = {
+            clientId: " hwnt489m5gkpfyf45vcm",
+            clientSecret: "cc224d8b1ec64b9e850d6ef55e5ba402",
+            deviceId: "bfe2a8f17ebd1d39d1hctm",
+            baseUrl: "https://openapi.tuyaeu.com"
+        };
+
+        // Variáveis globais
+        let accessToken = "";
+        let tokenExpiryTime = 0;
+
+        // Elementos da UI
+        const elements = {
+            generation: document.getElementById('generation'),
+            consumption: document.getElementById('consumption'),
+            grid: document.getElementById('grid'),
+            voltage: document.getElementById('voltage'),
+            error: document.getElementById('error'),
+            refresh: document.getElementById('refresh'),
+            lastUpdate: document.getElementById('lastUpdate')
+        };
+
+        // Funções auxiliares
+        const helpers = {
+            showError: (msg) => {
+                elements.error.textContent = msg;
+                console.error(msg);
+            },
+            
+            formatNumber: (num) => num ? Math.round(num) : '--',
+            
+            formatTime: () => new Date().toLocaleTimeString('pt-BR'),
+            
+            calculateSign: (clientId, accessToken, secret, timestamp) => {
+                const stringToSign = clientId + (accessToken || '') + timestamp;
+                return CryptoJS.HmacSHA256(stringToSign, secret).toString(CryptoJS.enc.Base64);
+            },
+            
+            fetchWithRetry: async (url, options, retries = 3) => {
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        const response = await fetch(url, options);
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        return await response.json();
+                    } catch (error) {
+                        if (i === retries - 1) throw error;
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                }
+            }
+        };
+
+        // Obter token de acesso
+        async function getAccessToken() {
+            const timestamp = Date.now();
+            const sign = helpers.calculateSign(CONFIG.clientId, '', CONFIG.clientSecret, timestamp);
+            
+            try {
+                const data = await helpers.fetchWithRetry(`${CONFIG.baseUrl}/v1.0/token?grant_type=1`, {
+                    method: 'GET',
+                    headers: {
+                        'client_id': CONFIG.clientId,
+                        'secret': CONFIG.clientSecret,
+                        'sign': sign,
+                        't': timestamp,
+                        'sign_method': 'HMAC-SHA256'
+                    }
+                });
+                
+                if (!data.success) throw new Error(data.msg || "Failed to get token");
+                
+                accessToken = data.result.access_token;
+                tokenExpiryTime = Date.now() + (data.result.expire_time * 1000);
+                return accessToken;
+                
+            } catch (error) {
+                helpers.showError("Erro ao obter token: " + error.message);
+                throw error;
+            }
+        }
+
+        // Verificar/renovar token
+        async function ensureValidToken() {
+            if (!accessToken || Date.now() >= tokenExpiryTime - 60000) {
+                return await getAccessToken();
+            }
+            return accessToken;
+        }
+
+        // Buscar dados do dispositivo
+        async function getDeviceStatus() {
+            try {
+                const token = await ensureValidToken();
+                const timestamp = Date.now();
+                const sign = helpers.calculateSign(CONFIG.clientId, token, CONFIG.clientSecret, timestamp);
+                
+                const data = await helpers.fetchWithRetry(
+                    `${CONFIG.baseUrl}/v1.0/devices/${CONFIG.deviceId}/status`, {
+                    method: 'GET',
+                    headers: {
+                        'client_id': CONFIG.clientId,
+                        'access_token': token,
+                        'sign': sign,
+                        't': timestamp,
+                        'sign_method': 'HMAC-SHA256'
+                    }
+                });
+                
+                if (!data.success) throw new Error(data.msg || "Failed to get device status");
+                return data.result;
+                
+            } catch (error) {
+                helpers.showError("Erro ao buscar dados: " + error.message);
+                throw error;
+            }
+        }
+
+        // Atualizar interface
+        async function updateDashboard() {
+            try {
+                const status = await getDeviceStatus();
+                
+                // Extrair valores (ajuste conforme seus DPs)
+                const generation = status.find(item => item.code === 'cur_power1')?.value || 0;
+                const grid = status.find(item => item.code === 'cur_power2')?.value || 0;
+                const voltage = status.find(item => item.code === 'cur_voltage1')?.value || 0;
+                const consumption = generation + Math.max(0, grid);
+                
+                // Atualizar UI
+                elements.generation.textContent = helpers.formatNumber(generation) + ' W';
+                elements.grid.textContent = helpers.formatNumber(grid) + ' W';
+                elements.consumption.textContent = helpers.formatNumber(consumption) + ' W';
+                elements.voltage.textContent = helpers.formatNumber(voltage) + ' V';
+                elements.lastUpdate.textContent = 'Última atualização: ' + helpers.formatTime();
+                elements.error.textContent = '';
+                
+            } catch (error) {
+                console.error("Erro na atualização:", error);
+            }
+        }
+
+        // Eventos
+        elements.refresh.addEventListener('click', updateDashboard);
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDashboard().catch(console.error);
+        });
+    </script>
+</body>
+</html>
