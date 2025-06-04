@@ -2,9 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor Solar Residencial</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <title>Monitor Solar</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -80,58 +78,27 @@
     <div id="lastUpdate" style="margin-top: 15px;"></div>
 
     <script>
-        // Configuração - SUBSTITUA com seus dados
-        const CONFIG = {
-            clientId: "hwnt489m5gkpfyf45vcm",
-            clientSecret: "cc224d8b1ec64b9e850d6ef55e5ba402",
-            deviceId: "bfe2a8f17ebd1d39d1hctm",
-            baseUrl: "https://openapi.tuyaeu.com"
-        };
-
-        // Variáveis globais
-        let accessToken = "";
-        let tokenExpiryTime = 0;
-
-        // Elementos da UI
-        const elements = {
-            generation: document.getElementById('generation'),
-            consumption: document.getElementById('consumption'),
-            grid: document.getElementById('grid'),
-            voltage: document.getElementById('voltage'),
-            error: document.getElementById('error'),
-            refresh: document.getElementById('refresh'),
-            lastUpdate: document.getElementById('lastUpdate')
-        };
-
-        // Funções auxiliares
-        const helpers = {
-            showError: (msg) => {
-                elements.error.textContent = msg;
-                console.error(msg);
-            },
-            
-            formatNumber: (num) => num ? Math.round(num) : '--',
-            
-            formatTime: () => new Date().toLocaleTimeString('pt-BR'),
-            
-            calculateSign: (clientId, accessToken, secret, timestamp) => {
-                const stringToSign = clientId + (accessToken || '') + timestamp;
-                return CryptoJS.HmacSHA256(stringToSign, secret).toString(CryptoJS.enc.Base64);
-            },
-            
-            fetchWithRetry: async (url, options, retries = 3) => {
-                for (let i = 0; i < retries; i++) {
-                    try {
-                        const response = await fetch(url, options);
-                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                        return await response.json();
-                    } catch (error) {
-                        if (i === retries - 1) throw error;
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                    }
+       <script>
+        async function fetchData() {
+            try {
+                const response = await fetch('http://localhost:3000/api/device-status?deviceId=seu_device_id');
+                
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status}`);
                 }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateUI(data.result);
+                } else {
+                    showError(data.msg || "Erro na resposta da API");
+                }
+            } catch (error) {
+                showError("Falha na conexão: " + error.message);
+                console.error("Detalhes do erro:", error);
             }
-        };
+        }
 
         // Obter token de acesso
         async function getAccessToken() {
@@ -178,7 +145,7 @@
                 const sign = helpers.calculateSign(CONFIG.clientId, token, CONFIG.clientSecret, timestamp);
                 
                 const data = await helpers.fetchWithRetry(
-                    `${CONFIG.baseUrl}/v2.0/cloud/thing/${CONFIG.deviceId}/status`, {
+                    `${CONFIG.baseUrl}/v1.0/iot-03/devices/thing/${CONFIG.deviceId}/status`, {
                     method: 'GET',
                     headers: {
                         'client_id': CONFIG.clientId,
