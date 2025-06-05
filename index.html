@@ -3,203 +3,449 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor Solar Residencial</title>
+    <title>Monitor Usina Solar - Visualização Casa</title>
     <style>
         :root {
             --primary: #4285f4;
-            --generation: #34a853;
-            --import: #ea4335;
-            --consumption: #fbbc05;
-            --voltage: #9c27b0;
+            --generation: #34a853;    /* verde - produção */
+            --import: #ea4335;        /* vermelho - importação */
+            --consumption: #fbbc05;   /* amarelo - consumo */
+            --positive-flow: #ea4335; /* vermelho */
+            --negative-flow: #34a853; /* verde */
+            --connection-line: #666;   /* cinza para linhas */
+            --text: #202124;
         }
         
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            text-align: center;
+            font-family: 'Roboto', Arial, sans-serif;
             background-color: #f8f9fa;
-        }
-        
-        h1 {
-            color: var(--primary);
-        }
-        
-        .dashboard {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 20px;
-            margin: 30px 0;
-        }
-        
-        .card {
-            background: white;
-            border-radius: 10px;
+            color: var(--text);
+            margin: 0;
             padding: 20px;
-            width: 150px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
         }
         
-        .value {
-            font-size: 24px;
-            font-weight: bold;
-            margin: 10px 0;
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 800px;
         }
         
-        .generation { color: var(--generation); }
-        .consumption { color: var(--consumption); }
-        .grid { color: var(--import); }
-        .voltage { color: var(--voltage); }
+        .header h1 {
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
         
-        button {
-            background: var(--primary);
+        /* Container principal com imagem de fundo */
+        .house-monitor {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background-image: url('casa-com-painéis-marcada.jpg');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            margin-bottom: 20px;
+        }
+        
+        /* Estilo dos círculos de energia */
+        .energy-circle {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
             color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            z-index: 10;
         }
         
-        button:hover {
-            opacity: 0.9;
+        .circle-value {
+            font-size: 20px;
+            margin-bottom: 2px;
         }
         
-        .error {
-            color: #d32f2f;
-            margin: 15px 0;
-            min-height: 20px;
+        .circle-label {
+            font-size: 12px;
+            text-align: center;
+        }
+        
+        /* Posições dos círculos baseadas nos números da imagem */
+        .circle-generation {
+            top: 70px;   /* Posição do número 1 */
+            left: 400px;
+            background-color: var(--generation);
+        }
+        
+        .circle-consumption {
+            top: 360px;   /* Posição do número 2 */
+            left: 265px;
+            background-color: var(--consumption);
+        }
+        
+        .circle-import {
+            top: 100px;   /* Posição do número 3 */
+            left: 120px;
+            background-color: var(--import);
+        }
+        
+        /* Voltagem e controles */
+        .voltage-container {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+            width: 100%;
+            max-width: 300px;
+        }
+        
+        .voltage-header {
+            background-color: #9c27b0;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            display: inline-block;
+        }
+        
+        .voltage-value {
+            font-size: 28px;
+            font-weight: 500;
+            color: #9c27b0;
+        }
+        
+        .footer {
+            width: 100%;
+            max-width: 800px;
+            text-align: center;
         }
         
         .last-update {
-            color: #666;
-            margin-top: 15px;
             font-size: 14px;
+            color: #9aa0a6;
+        }
+        
+        .error-message {
+            color: #d32f2f;
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .refresh-btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.2s;
+        }
+        
+        .refresh-btn:hover {
+            background-color: #3367d6;
+        }
+        
+        .loading {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
-    <h1>Monitoramento Solar Residencial</h1>
-    <p>Dados em tempo real via Tuya Cloud</p>
+    <div class="header">
+        <h1>Monitoramento Solar Residencial</h1>
+        <p>Fluxo de energia em tempo real</p>
+    </div>
     
-    <div class="dashboard">
-        <div class="card">
-            <h3>Produção Solar</h3>
-            <div class="value generation" id="generation">-- W</div>
+    <!-- Voltagem média -->
+    <div class="voltage-container">
+        <div class="voltage-header">Voltagem da Rede</div>
+        <div class="voltage-value" id="avgVoltage">--</div>
+    </div>
+    
+    <!-- Monitor com imagem da casa -->
+    <div class="house-monitor">
+        <!-- Círculos de energia -->
+        <div class="energy-circle circle-generation" id="generationCircle">
+            <div class="circle-value" id="generationPower">--</div>
+            <div class="circle-label">Produção Solar</div>
         </div>
         
-        <div class="card">
-            <h3>Consumo</h3>
-            <div class="value consumption" id="consumption">-- W</div>
+        <div class="energy-circle circle-consumption" id="consumptionCircle">
+            <div class="circle-value" id="consumptionPower">--</div>
+            <div class="circle-label">Consumo</div>
         </div>
         
-        <div class="card">
-            <h3>Conexão com a Rede</h3>
-            <div class="value grid" id="grid">-- W</div>
-        </div>
-        
-        <div class="card">
-            <h3>Voltagem</h3>
-            <div class="value voltage" id="voltage">-- V</div>
+        <div class="energy-circle circle-import" id="importCircle">
+            <div class="circle-value" id="importPower">--</div>
+            <div class="circle-label">Rede Elétrica</div>
         </div>
     </div>
     
-    <div id="error" class="error"></div>
-    <button id="refresh">Atualizar Dados</button>
-    <div id="lastUpdate" class="last-update">Última atualização: --</div>
+    <div class="footer">
+        <div class="last-update" id="lastUpdate">
+            Última atualização: --
+        </div>
+        
+        <div id="errorDisplay" class="error-message"></div>
+        
+        <div class="controls">
+            <button class="refresh-btn" id="refreshBtn">
+                <span id="refreshIcon">↻</span>
+                Atualizar
+            </button>
+        </div>
+    </div>
 
     <script>
-        // Configuração - Substitua com seu deviceId
+        // CONFIGURAÇÃO TUYA
         const CONFIG = {
-            deviceId: "bfe2a8f17ebd1d39d1hctm", // Seu deviceId real
-            proxyUrl: "http://localhost:3000/api/device-status" // URL do seu proxy
+            clientId: "hskykhepdrxhmygcg5cd",
+            clientSecret: "c28b99733f7c4c6cb4fe3b3f7d8e283f",
+            deviceId: "bfcaa7d812363ec7eeimjs",
+            refreshInterval: 5000
         };
 
         // Elementos da interface
         const elements = {
-            generation: document.getElementById('generation'),
-            consumption: document.getElementById('consumption'),
-            grid: document.getElementById('grid'),
-            voltage: document.getElementById('voltage'),
-            error: document.getElementById('error'),
-            refresh: document.getElementById('refresh'),
-            lastUpdate: document.getElementById('lastUpdate')
+            // Voltagem
+            avgVoltage: document.getElementById('avgVoltage'),
+            
+            // Círculos
+            importPower: document.getElementById('importPower'),
+            consumptionPower: document.getElementById('consumptionPower'),
+            generationPower: document.getElementById('generationPower'),
+            
+            // Círculos completos
+            importCircle: document.getElementById('importCircle'),
+            consumptionCircle: document.getElementById('consumptionCircle'),
+            generationCircle: document.getElementById('generationCircle'),
+            
+            // Controles
+            lastUpdate: document.getElementById('lastUpdate'),
+            refreshBtn: document.getElementById('refreshBtn'),
+            refreshIcon: document.getElementById('refreshIcon'),
+            errorDisplay: document.getElementById('errorDisplay')
         };
 
-        // Formata números e datas
-        const format = {
-            number: (num) => num ? Math.round(num) : '--',
-            voltage: (num) => num ? parseFloat(num).toFixed(1) : '--',
-            time: () => new Date().toLocaleTimeString('pt-BR')
+        // Token de acesso Tuya
+        let accessToken = null;
+        let tokenExpireTime = 0;
+
+        // Funções auxiliares
+        const helpers = {
+            formatNumber: (num) => {
+                return parseFloat(num).toFixed(0);
+            },
+            
+            formatVoltage: (num) => {
+                return parseFloat(num).toFixed(1);
+            },
+            
+            formatDateTime: (date) => {
+                return date.toLocaleTimeString('pt-BR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            },
+            
+            setLoading: (state) => {
+                if (state) {
+                    elements.refreshIcon.classList.add('loading');
+                    elements.refreshBtn.disabled = true;
+                } else {
+                    elements.refreshIcon.classList.remove('loading');
+                    elements.refreshBtn.disabled = false;
+                }
+            },
+            
+            showError: (message) => {
+                elements.errorDisplay.textContent = message;
+                setTimeout(() => {
+                    elements.errorDisplay.textContent = '';
+                }, 5000);
+            },
+            
+            resetValues: () => {
+                elements.avgVoltage.textContent = '--';
+                elements.importPower.textContent = '--';
+                elements.consumptionPower.textContent = '--';
+                elements.generationPower.textContent = '--';
+            }
         };
 
-        // Mostra erros na interface
-        function showError(message) {
-            elements.error.textContent = message;
-            console.error(message);
-        }
-
-        // Busca dados do dispositivo via proxy
-        async function fetchData() {
+        // Obter token de acesso da Tuya
+        async function getTuyaToken() {
+            const now = Math.floor(Date.now() / 1000);
+            
+            // Se já temos um token válido, retorna ele
+            if (accessToken && tokenExpireTime > now + 60) {
+                return accessToken;
+            }
+            
             try {
-                elements.error.textContent = "Carregando...";
-                
-                const response = await fetch(`${CONFIG.proxyUrl}?deviceId=${CONFIG.deviceId}`);
+                const response = await fetch('https://openapi.tuyaeu.com/v1.0/token?grant_type=1', {
+                    method: 'GET',
+                    headers: {
+                        'client_id': CONFIG.clientId,
+                        'client_secret': CONFIG.clientSecret
+                    }
+                });
                 
                 if (!response.ok) {
-                    throw new Error(`Erro HTTP: ${response.status}`);
+                    throw new Error(`Erro ao obter token: ${response.status}`);
                 }
                 
                 const data = await response.json();
                 
-                if (data.error) {
-                    throw new Error(data.error);
+                if (!data.success) {
+                    throw new Error(data.msg || "Falha ao obter token");
                 }
                 
-                return data.result || [];
+                accessToken = data.result.access_token;
+                tokenExpireTime = now + data.result.expire_time;
                 
+                return accessToken;
             } catch (error) {
-                showError("Falha ao buscar dados: " + error.message);
+                console.error("Erro ao obter token Tuya:", error);
+                helpers.showError(`Erro: ${error.message}`);
                 return null;
             }
         }
 
-        // Atualiza a interface com os dados
-        async function updateUI() {
-            const deviceData = await fetchData();
-            if (!deviceData) return;
+        // Busca os dados do dispositivo Tuya
+        async function fetchData() {
+            helpers.setLoading(true);
+            helpers.resetValues();
             
-            // Extrai valores (ajuste os códigos conforme seu dispositivo)
-            const generation = deviceData.find(item => item.code === 'cur_power1')?.value || 0;
-            const grid = deviceData.find(item => item.code === 'cur_power2')?.value || 0;
-            const voltage = deviceData.find(item => item.code === 'cur_voltage1')?.value || 0;
-            
-            // Calcula consumo (produção + energia da rede)
-            const consumption = generation + Math.max(0, grid);
-            
-            // Atualiza a interface
-            elements.generation.textContent = `${format.number(generation)} W`;
-            elements.grid.textContent = `${format.number(grid)} W`;
-            elements.consumption.textContent = `${format.number(consumption)} W`;
-            elements.voltage.textContent = `${format.voltage(voltage)} V`;
-            elements.lastUpdate.textContent = `Última atualização: ${format.time()}`;
-            elements.error.textContent = "";
+            try {
+                const token = await getTuyaToken();
+                if (!token) {
+                    throw new Error("Não foi possível obter token de acesso");
+                }
+                
+                const now = new Date();
+                const apiUrl = `https://openapi.tuyaeu.com/v1.0/devices/${CONFIG.deviceId}/status`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'client_id': CONFIG.clientId,
+                        'access_token': token
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Erro na requisição: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data || !data.success) {
+                    throw new Error(data.msg || "Resposta inválida da API Tuya");
+                }
+                
+                // Processa os dados do dispositivo ALTO-LWB2-TUYA
+                // Nota: Você precisará ajustar esses campos conforme o modelo específico do seu dispositivo
+                const status = data.result || [];
+                
+                let voltage = 0;
+                let importPower = 0;
+                let generationPower = 0;
+                
+                // Exemplo de como processar os dados - ajuste conforme seu dispositivo
+                status.forEach(item => {
+                    switch(item.code) {
+                        case 'voltage': // Código para voltagem
+                            voltage = parseFloat(item.value) || 0;
+                            break;
+                        case 'power': // Código para potência (pode ser importação ou geração)
+                            // Aqui você precisará verificar qual é o código específico para cada medida
+                            // Este é um exemplo genérico
+                            importPower = parseFloat(item.value) || 0;
+                            break;
+                        case 'solar_power': // Exemplo de código para geração solar
+                            generationPower = parseFloat(item.value) || 0;
+                            break;
+                    }
+                });
+                
+                // Atualiza a interface
+                elements.avgVoltage.textContent = helpers.formatVoltage(voltage);
+                elements.importPower.textContent = helpers.formatNumber(importPower);
+                elements.generationPower.textContent = helpers.formatNumber(generationPower);
+                
+                // Calcula consumo (importação + geração)
+                const consumptionPower = importPower + generationPower;
+                elements.consumptionPower.textContent = helpers.formatNumber(consumptionPower);
+                
+                // Atualiza cores dos círculos baseado no fluxo
+                if (importPower < 0) {
+                    // Exportando para rede - verde
+                    elements.importCircle.style.backgroundColor = 'var(--generation)';
+                } else {
+                    // Importando da rede - vermelho
+                    elements.importCircle.style.backgroundColor = 'var(--import)';
+                }
+                
+                elements.lastUpdate.textContent = `Última atualização: ${helpers.formatDateTime(now)}`;
+                
+            } catch (error) {
+                console.error("Erro ao buscar dados:", error);
+                helpers.showError(`Erro: ${error.message}`);
+            } finally {
+                helpers.setLoading(false);
+            }
         }
 
-        // Eventos
-        elements.refresh.addEventListener('click', updateUI);
+        // Configura eventos
+        elements.refreshBtn.addEventListener('click', fetchData);
         
-        // Atualização automática a cada 10 segundos
-        let refreshInterval;
+        // Atualização automática
+        let intervalId;
         function startAutoRefresh() {
-            updateUI(); // Atualiza imediatamente
-            refreshInterval = setInterval(updateUI, 10000); // 10 segundos
+            fetchData();
+            intervalId = setInterval(fetchData, CONFIG.refreshInterval);
         }
         
-        // Inicia quando a página carrega
-        document.addEventListener('DOMContentLoaded', startAutoRefresh);
+        // Controle de atualização quando a página está visível/oculta
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                clearInterval(intervalId);
+            } else {
+                startAutoRefresh();
+            }
+        });
+        
+        // Inicia o monitoramento
+        startAutoRefresh();
     </script>
 </body>
 </html>
