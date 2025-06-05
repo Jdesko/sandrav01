@@ -224,11 +224,12 @@
     </div>
 
     <script>
-        // CONFIGURAÇÃO TUYA
+        // CONFIGURAÇÃO TUYA - PREENCHA COM SEUS DADOS
         const CONFIG = {
-            clientId: "hskykhepdrxhmygcg5cd",
-            clientSecret: "c28b99733f7c4c6cb4fe3b3f7d8e283f",
-            deviceId: "bfcaa7d812363ec7eeimjs",
+            clientId: "hskykhepdrxhmygcg5cd",          // Substitua pelo seu Client ID
+            clientSecret: "c28b99733f7c4c6cb4fe3b3f7d8e283f",  // Substitua pelo seu Client Secret
+            deviceId: "	bfe2a8f17ebd1d39d1hctm",          // Substitua pelo ID do dispositivo ALTO-LWB2-TUYA
+            baseUrl: "https://openapi.tuyaeu.com",   // Use o endpoint correto para sua região
             refreshInterval: 5000
         };
 
@@ -298,10 +299,36 @@
                 elements.importPower.textContent = '--';
                 elements.consumptionPower.textContent = '--';
                 elements.generationPower.textContent = '--';
+            },
+            
+            // Função para calcular HMAC-SHA256 (simplificada para demonstração)
+            calculateSha256: async (secret, message) => {
+                // Em produção, use uma biblioteca como crypto-js
+                // Esta implementação pode não funcionar em todos os navegadores
+                try {
+                    const encoder = new TextEncoder();
+                    const key = await window.crypto.subtle.importKey(
+                        'raw',
+                        encoder.encode(secret),
+                        { name: 'HMAC', hash: 'SHA-256' },
+                        false,
+                        ['sign']
+                    );
+                    const signature = await window.crypto.subtle.sign(
+                        'HMAC',
+                        key,
+                        encoder.encode(message)
+                    );
+                    const hashArray = Array.from(new Uint8Array(signature));
+                    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                } catch (error) {
+                    console.error("Erro ao calcular assinatura:", error);
+                    return "signature_error";
+                }
             }
         };
 
-        // Obter token de acesso da Tuya
+        // Obter token de acesso da Tuya (método corrigido)
         async function getTuyaToken() {
             const now = Math.floor(Date.now() / 1000);
             
@@ -311,11 +338,25 @@
             }
             
             try {
-                const response = await fetch('https://openapi.tuyaeu.com/v1.0/token?grant_type=1', {
+                // Calcula a assinatura necessária
+                const timestamp = now * 1000;
+                const signMethod = 'HMAC-SHA256';
+                const nonce = Math.random().toString(36).substring(2);
+                
+                // Cria a string para assinatura
+                const stringToSign = `${CONFIG.clientId}${timestamp}${nonce}`;
+                
+                // Calcula a assinatura
+                const signature = await helpers.calculateSha256(CONFIG.clientSecret, stringToSign);
+                
+                const response = await fetch(`${CONFIG.baseUrl}/v1.0/token?grant_type=1`, {
                     method: 'GET',
                     headers: {
                         'client_id': CONFIG.clientId,
-                        'client_secret': CONFIG.clientSecret
+                        'sign': signature.toUpperCase(),
+                        't': timestamp.toString(),
+                        'sign_method': signMethod,
+                        'nonce': nonce
                     }
                 });
                 
@@ -335,12 +376,12 @@
                 return accessToken;
             } catch (error) {
                 console.error("Erro ao obter token Tuya:", error);
-                helpers.showError(`Erro: ${error.message}`);
+                helpers.showError(`Erro de autenticação: ${error.message}`);
                 return null;
             }
         }
 
-        // Busca os dados do dispositivo Tuya
+        // Busca os dados do dispositivo Tuya (atualizado para ALTO-LWB2-TUYA)
         async function fetchData() {
             helpers.setLoading(true);
             helpers.resetValues();
@@ -352,13 +393,25 @@
                 }
                 
                 const now = new Date();
-                const apiUrl = `https://openapi.tuyaeu.com/v1.0/devices/${CONFIG.deviceId}/status`;
+                const timestamp = Math.floor(Date.now() / 1000) * 1000;
+                const nonce = Math.random().toString(36).substring(2);
+                const signMethod = 'HMAC-SHA256';
+                
+                // Cria a string para assinatura
+                const stringToSign = `${token}${timestamp}${nonce}`;
+                const signature = await helpers.calculateSha256(CONFIG.clientSecret, stringToSign);
+                
+                const apiUrl = `${CONFIG.baseUrl}/v1.0/devices/${CONFIG.deviceId}/status`;
                 
                 const response = await fetch(apiUrl, {
                     method: 'GET',
                     headers: {
                         'client_id': CONFIG.clientId,
-                        'access_token': token
+                        'access_token': token,
+                        'sign': signature.toUpperCase(),
+                        't': timestamp.toString(),
+                        'sign_method': signMethod,
+                        'nonce': nonce
                     }
                 });
                 
@@ -373,37 +426,38 @@
                 }
                 
                 // Processa os dados do dispositivo ALTO-LWB2-TUYA
-                // Nota: Você precisará ajustar esses campos conforme o modelo específico do seu dispositivo
+                // Baseado nos DPs do seu dispositivo
                 const status = data.result || [];
-                
                 let voltage = 0;
                 let importPower = 0;
                 let generationPower = 0;
                 
-                // Exemplo de como processar os dados - ajuste conforme seu dispositivo
                 status.forEach(item => {
                     switch(item.code) {
-                        case 'voltage': // Código para voltagem
+                        case 'cur_voltage1': // Voltagem da rede
                             voltage = parseFloat(item.value) || 0;
                             break;
-                        case 'power': // Código para potência (pode ser importação ou geração)
-                            // Aqui você precisará verificar qual é o código específico para cada medida
-                            // Este é um exemplo genérico
+                        case 'cur_power1': // Potência da rede (importação/exportação)
                             importPower = parseFloat(item.value) || 0;
                             break;
-                        case 'solar_power': // Exemplo de código para geração solar
+                        case 'cur_power2': // Potência solar (geração)
                             generationPower = parseFloat(item.value) || 0;
                             break;
                     }
                 });
                 
+                // Ajusta valores conforme escala (dividindo por 10^scale)
+                // Para o ALTO-LWB2-TUYA, cur_power1 e cur_power2 têm scale=1 (dividir por 10)
+                importPower = importPower / 10;
+                generationPower = generationPower / 10;
+                
                 // Atualiza a interface
                 elements.avgVoltage.textContent = helpers.formatVoltage(voltage);
-                elements.importPower.textContent = helpers.formatNumber(importPower);
+                elements.importPower.textContent = helpers.formatNumber(Math.abs(importPower));
                 elements.generationPower.textContent = helpers.formatNumber(generationPower);
                 
                 // Calcula consumo (importação + geração)
-                const consumptionPower = importPower + generationPower;
+                const consumptionPower = Math.abs(importPower) + generationPower;
                 elements.consumptionPower.textContent = helpers.formatNumber(consumptionPower);
                 
                 // Atualiza cores dos círculos baseado no fluxo
